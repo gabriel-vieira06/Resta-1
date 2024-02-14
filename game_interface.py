@@ -2,6 +2,7 @@ import pygame
 import pygame_menu
 import game_connection
 import game_logic
+import threading
 from typing import Optional 
 
 BACKGROUND = (17, 20, 69)
@@ -12,6 +13,7 @@ BOARD_DESLOCATION = (40,30)
 
 CHAT_SIZE = (240, 560)
 CHAT_DESLOCATION = (660,30)
+FONT_SIZE = 18
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -23,8 +25,8 @@ PORT = None
 
 clock: Optional['pygame.time.Clock'] = None
 
-client: Optional['game_connection.Client'] = None
-server: Optional['game_connection.Server'] = None
+client: Optional['game_connection.Client_2'] = None
+server: Optional['game_connection.Client_2'] = None
 
 main_menu: Optional['pygame_menu.Menu'] = None
 host_menu: Optional['pygame_menu.Menu'] = None
@@ -48,6 +50,55 @@ default_theme = pygame_menu.Theme(
     title_font=pygame_menu.font.FONT_NEVIS
 )
 
+font = pygame.font.Font(None, FONT_SIZE)
+
+def draw_text(surface, text, color, x, y):
+    text_surface = font.render(text, True, color)
+    surface.blit(text_surface, (x, y))
+
+def receive_messages(client, chat_window):
+    while True:
+        try:
+            message = client.receive_message()
+            chat_window.add_message(f'Oponente: {message}')
+        except Exception as e:
+            print("Erro ao receber mensagem:", e)
+            break
+
+class ChatWindow:
+    def __init__(self, client, surface):
+        self.client = client
+        self.surface = surface
+        self.messages = []
+        self.input_box = pygame.Rect(10, CHAT_SIZE[1] - FONT_SIZE - 10, CHAT_SIZE[0] - 20, FONT_SIZE)
+        self.text = ''
+
+    def add_message(self, message):
+        self.messages.append(message)
+
+    def send_message(self):
+        if self.text:
+            self.client.send_message(self.text)
+            self.add_message(f'Você: {self.text}')
+            self.text = ''
+
+    def draw(self):
+        self.surface.fill(WHITE)
+        for i, message in enumerate(self.messages):
+            draw_text(self.surface, message, BLACK, 10, i * FONT_SIZE)
+        pygame.draw.rect(self.surface, BLACK, self.input_box, 2)
+        draw_text(self.surface, self.text, BLACK, self.input_box.x + 5, self.input_box.y + 5)
+        pygame.display.flip()
+
+    def handle_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN:
+                self.send_message()
+            elif event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+            else:
+                self.text += event.unicode
+
 def pos_on_board(pos):
     return BOARD_DESLOCATION[1] <= pos[1] < BOARD_SIZE[1] + BOARD_DESLOCATION[1] and \
            BOARD_DESLOCATION[0] <= pos[0] < BOARD_SIZE[0] + BOARD_DESLOCATION[0]
@@ -64,9 +115,6 @@ def get_host_port(host_port):
     global PORT
     PORT = host_port
 
-def send_msg(message):
-    pass
-
 def challenger_screen_play():
 
     global search_menu
@@ -75,20 +123,20 @@ def challenger_screen_play():
     # Client Socket
     # -------------------------------------------------------------------------
 
-    client = game_connection.Client(IP, int(PORT))
-    client.connect()
+    client = game_connection.Client_2()
+    client.join_room(IP, int(PORT))
 
     search_menu.disable()
     search_menu.full_reset()
-    play_function()
+    play_function(client)
 
-def host_screen_play():
+def host_screen_play(server):
 
     global host_menu
 
     host_menu.disable()
     host_menu.full_reset()
-    play_function()
+    play_function(server)
 
 def host_match():
     # -------------------------------------------------------------------------
@@ -103,8 +151,8 @@ def host_match():
     # Server Socket
     # -------------------------------------------------------------------------
 
-    server = game_connection.Server()
-    server.start_server()
+    server = game_connection.Client_2()
+    server.create_room()
 
     # -------------------------------------------------------------------------
     # Create menu: Host Menu
@@ -118,7 +166,7 @@ def host_match():
     )
 
     host_menu.add.label(
-        f'Compartilhe seu IP e Porta: {server.host}:{server.port}',
+        f'Compartilhe seu IP e Porta: {server.ip}:{server.port}',
         font_size=20
     )
     host_menu.add.vertical_margin(20)
@@ -143,7 +191,6 @@ def host_match():
                 exit()
             elif e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_ESCAPE:
-                    server.server_socket.close()
                     main_menu.enable()
                     host_menu.disable()
                     host_menu.full_reset()
@@ -151,7 +198,7 @@ def host_match():
                     return
         
         if server.client_connected:
-            host_screen_play()
+            host_screen_play(server)
                 
         # Continue playing
         draw_background()
@@ -159,6 +206,8 @@ def host_match():
         host_menu.update(events)
         host_menu.draw(surface)
         pygame.display.flip()
+
+        server.wait_connection()
 
 def search_match():
 
@@ -234,7 +283,7 @@ def search_match():
         search_menu.draw(surface)
         pygame.display.flip()
 
-def play_function():
+def play_function(player):
 
     # -------------------------------------------------------------------------
     # Globals
@@ -243,34 +292,8 @@ def play_function():
     global main_menu
     global search_menu
     global clock
-    global client
     global IP
     global PORT
-
-    # -------------------------------------------------------------------------
-    # Create menu: Chat Menu
-    # -------------------------------------------------------------------------
-
-    chat_theme = default_theme.copy()
-    chat_theme.title = False
-
-    chat_menu = pygame_menu.Menu(
-        height=CHAT_SIZE[1],
-        title='',
-        theme=chat_theme,
-        width=CHAT_SIZE[0],
-        position=(CHAT_DESLOCATION[0], CHAT_DESLOCATION[1], False),
-        mouse_motion_selection=True
-    )
-    chat_menu.add.vertical_margin(CHAT_SIZE[1] - 70)
-    chat_menu.add.text_input(
-        align=pygame_menu.locals.ALIGN_LEFT,
-        title='Escreva algo: ',
-        default='',
-        font_size=18,
-        onreturn=send_msg,
-        margin=(10,0)
-        )
 
     board = [[-1, -1,  1,  1,  1, -1, -1],
             [-1, -1,  1,  1,  1, -1, -1],
@@ -282,11 +305,13 @@ def play_function():
 
     board_surface = pygame.Surface(BOARD_SIZE)
     chat_surface = pygame.Surface(CHAT_SIZE)
+    chat_window = ChatWindow(player, chat_surface)
+    threading.Thread(target=receive_messages, args=(player, chat_window)).start()
     selected_piece = None
 
     while True:
 
-        clock.tick(60)
+        clock.tick(30)
 
         events = pygame.event.get()
         for e in events:
@@ -309,20 +334,18 @@ def play_function():
                             board[row][col] = 1
                             if game_logic.game_over(board):
                                 print("Fim de Jogo")
-                                main_menu.enable()
                                 
-                                return
+                                #return
                         selected_piece = None
+            chat_window.handle_event(e)
         
         # Continue playing
         draw_background()
 
+        surface.blit(chat_surface, (CHAT_DESLOCATION))
         surface.blit(board_surface, (BOARD_DESLOCATION))
 
-        chat_surface.fill(BACKGROUND)
-
-        chat_menu.update(events)
-        chat_menu.draw(surface)
+        chat_window.draw()
         game_logic.draw_board(board_surface, board, selected_piece)
 
         pygame.display.flip()
