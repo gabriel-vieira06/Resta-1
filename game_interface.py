@@ -309,7 +309,8 @@ def play_function():
                             board[row][col] = 1
                             if game_logic.game_over(board):
                                 print("Fim de Jogo")
-
+                                main_menu.enable()
+                                
                                 return
                         selected_piece = None
         
@@ -386,21 +387,16 @@ def draw_interface():
 
     while True:
 
-        # Tick
         clock.tick(FPS)
 
-        # Paint background
         draw_background()
 
-        # Application events
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
                 exit()
 
-        # Main menu
         if main_menu.is_enabled():
             main_menu.mainloop(surface, draw_background, fps_limit=FPS)
 
-        # Flip surface
         pygame.display.flip()
