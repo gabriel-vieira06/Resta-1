@@ -7,6 +7,7 @@ class Client:
         self.port = 0
         self.ip = socket.gethostbyname(socket.gethostname())
         self.client_connected = False
+        self.player_id = None
 
     def create_room(self):
         self.client_socket.bind(('', 0))
@@ -19,10 +20,10 @@ class Client:
         self.connection = self.client_socket
 
     def send_message(self, message):
-        self.connection.send(message.encode())
+        self.connection.send(message)
 
     def receive_message(self):
-        return self.connection.recv(1024).decode()
+        return self.connection.recv(1024)
     
     def get_host_port(self):
         return self.port

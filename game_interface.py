@@ -3,6 +3,7 @@ import pygame_menu
 import game_connection
 import game_logic
 import threading
+import pickle
 from typing import Optional 
 
 BACKGROUND = (17, 20, 69)
@@ -18,7 +19,7 @@ FONT_SIZE = 18
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
-FPS = 60
+FPS = 30
 
 IP = None
 PORT = None
@@ -52,20 +53,54 @@ default_theme = pygame_menu.Theme(
 
 font = pygame.font.Font(None, FONT_SIZE)
 
+board = [[-1, -1,  1,  1,  1, -1, -1],
+        [-1, -1,  1,  1,  1, -1, -1],
+        [ 1,  1,  1,  1,  1,  1,  1],
+        [ 1,  1,  1,  0,  1,  1,  1],
+        [ 1,  1,  1,  1,  1,  1,  1],
+        [-1, -1,  1,  1,  1, -1, -1],
+        [-1, -1,  1,  1,  1, -1, -1]]
+
 def draw_text(surface, text, color, x, y):
     text_surface = font.render(text, True, color)
     surface.blit(text_surface, (x, y))
 
 def receive_messages(client, chat_window):
+    
+    global board
+    
     while True:
         try:
             message = client.receive_message()
-            chat_window.add_message(f'Oponente: {message}')
+
+            if message.startswith(b'M:'):
+                message_without_prefix = message[2:].decode()
+                chat_window.add_message(f'Oponente: {message_without_prefix}')
+            else:
+                board = pickle.loads(message)
+            
         except Exception as e:
             print("Erro ao receber mensagem:", e)
             break
 
+def send_board_state(client):
 
+    global board
+
+    board_state = pickle.dumps(board)
+    client.send_message(board_state)
+
+
+class Message:
+    def __init__(self, content_type, content):
+        self.type = content_type
+        self.content = content
+
+    def get_content(self):
+        return self.content
+
+    def get_content_type(self):
+        return self.content_type
 
 class ChatWindow:
     def __init__(self, client, surface):
@@ -80,7 +115,7 @@ class ChatWindow:
 
     def send_message(self):
         if self.text:
-            self.client.send_message(self.text)
+            self.client.send_message(('M:' + self.text).encode())
             self.add_message(f'Você: {self.text}')
             self.text = ''
 
@@ -130,6 +165,7 @@ def challenger_screen_play():
 
     search_menu.disable()
     search_menu.full_reset()
+    client.player_id = 2
     play_function(client)
 
 def host_screen_play(server):
@@ -138,6 +174,7 @@ def host_screen_play(server):
 
     host_menu.disable()
     host_menu.full_reset()
+    server.player_id = 1
     play_function(server)
 
 def host_match():
@@ -184,7 +221,7 @@ def host_match():
 
     while True:
 
-        clock.tick(60)
+        clock.tick(FPS)
 
         # Application events
         events = pygame.event.get()
@@ -208,7 +245,7 @@ def host_match():
         host_menu.update(events)
         host_menu.draw(surface)
         pygame.display.flip()
-        
+
 def search_match():
 
     # -------------------------------------------------------------------------
@@ -262,7 +299,7 @@ def search_match():
 
     while True:
 
-        clock.tick(60)
+        clock.tick(FPS)
 
         events = pygame.event.get()
         for e in events:
@@ -292,16 +329,9 @@ def play_function(player):
     global main_menu
     global search_menu
     global clock
+    global board
     global IP
     global PORT
-
-    board = [[-1, -1,  1,  1,  1, -1, -1],
-            [-1, -1,  1,  1,  1, -1, -1],
-            [ 1,  1,  1,  1,  1,  1,  1],
-            [ 1,  1,  1,  0,  1,  1,  1],
-            [ 1,  1,  1,  1,  1,  1,  1],
-            [-1, -1,  1,  1,  1, -1, -1],
-            [-1, -1,  1,  1,  1, -1, -1]]
 
     board_surface = pygame.Surface(BOARD_SIZE)
     chat_surface = pygame.Surface(CHAT_SIZE)
@@ -311,7 +341,7 @@ def play_function(player):
 
     while True:
 
-        clock.tick(30)
+        clock.tick(FPS)
 
         events = pygame.event.get()
         for e in events:
@@ -332,11 +362,14 @@ def play_function(player):
                             board[selected_piece[0]][selected_piece[1]] = 0
                             board[(selected_piece[0] + row) // 2][(selected_piece[1] + col) // 2] = 0
                             board[row][col] = 1
-                            if game_logic.game_over(board):
-                                print("Fim de Jogo")
-                                
-                                #return
+
+                            send_board_state(player)
                         selected_piece = None
+
+            if game_logic.game_over(board):
+                print("Fim de Jogo")
+                
+                #return
             chat_window.handle_event(e)
         
         # Continue playing
