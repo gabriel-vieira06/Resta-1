@@ -65,6 +65,8 @@ def receive_messages(client, chat_window):
             print("Erro ao receber mensagem:", e)
             break
 
+
+
 class ChatWindow:
     def __init__(self, client, surface):
         self.client = client
@@ -123,7 +125,7 @@ def challenger_screen_play():
     # Client Socket
     # -------------------------------------------------------------------------
 
-    client = game_connection.Client_2()
+    client = game_connection.Client()
     client.join_room(IP, int(PORT))
 
     search_menu.disable()
@@ -151,7 +153,7 @@ def host_match():
     # Server Socket
     # -------------------------------------------------------------------------
 
-    server = game_connection.Client_2()
+    server = game_connection.Client()
     server.create_room()
 
     # -------------------------------------------------------------------------
@@ -206,9 +208,7 @@ def host_match():
         host_menu.update(events)
         host_menu.draw(surface)
         pygame.display.flip()
-
-        server.wait_connection()
-
+        
 def search_match():
 
     # -------------------------------------------------------------------------
