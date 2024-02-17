@@ -3,7 +3,9 @@ import pygame_menu
 import game_connection
 import game_logic
 import threading
+import sys
 import pickle
+import time
 from typing import Optional 
 
 BACKGROUND = (17, 20, 69)
@@ -23,6 +25,8 @@ FPS = 30
 
 IP = None
 PORT = None
+
+turn_order = True
 
 clock: Optional['pygame.time.Clock'] = None
 
@@ -68,6 +72,7 @@ def draw_text(surface, text, color, x, y):
 def receive_messages(client, chat_window):
     
     global board
+    global turn_order
     
     while True:
         try:
@@ -78,7 +83,8 @@ def receive_messages(client, chat_window):
                 chat_window.add_message(f'Oponente: {message_without_prefix}')
             else:
                 board = pickle.loads(message)
-            
+                time.sleep(1)
+                turn_order = not turn_order
         except Exception as e:
             print("Erro ao receber mensagem:", e)
             break
@@ -90,17 +96,33 @@ def send_board_state(client):
     board_state = pickle.dumps(board)
     client.send_message(board_state)
 
+def end_game(game_state):
 
-class Message:
-    def __init__(self, content_type, content):
-        self.type = content_type
-        self.content = content
+    global font
+    global surface
 
-    def get_content(self):
-        return self.content
+    counter = pygame.time.Clock()
 
-    def get_content_type(self):
-        return self.content_type
+    seconds = 10
+
+    while seconds > 0:
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        surface.fill((255, 255, 255))
+        texto = font.render("Encerrando em {} segundos...".format(seconds), True, (0, 0, 0))
+        surface.blit(texto, (50, 100))
+        texto = font.render("Resultado da partida: {}".format(game_state), True, (0, 0, 0))
+        surface.blit(texto, (50, 200))
+
+        pygame.display.flip()
+        counter.tick(1)
+        seconds -= 1
+    
+    pygame.quit()
+    sys.exit()
 
 class ChatWindow:
     def __init__(self, client, surface):
@@ -165,7 +187,7 @@ def challenger_screen_play():
 
     search_menu.disable()
     search_menu.full_reset()
-    client.player_id = 2
+    client.play_first = False
     play_function(client)
 
 def host_screen_play(server):
@@ -174,7 +196,7 @@ def host_screen_play(server):
 
     host_menu.disable()
     host_menu.full_reset()
-    server.player_id = 1
+    server.play_first = True
     play_function(server)
 
 def host_match():
@@ -227,7 +249,8 @@ def host_match():
         events = pygame.event.get()
         for e in events:
             if e.type == pygame.QUIT:
-                exit()
+                pygame.quit()
+                sys.exit()
             elif e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_ESCAPE:
                     main_menu.enable()
@@ -304,7 +327,8 @@ def search_match():
         events = pygame.event.get()
         for e in events:
             if e.type == pygame.QUIT:
-                exit()
+                pygame.quit()
+                sys.exit()
             elif e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_ESCAPE:
                     main_menu.enable()
@@ -330,46 +354,59 @@ def play_function(player):
     global search_menu
     global clock
     global board
+    global turn_order
     global IP
     global PORT
 
     board_surface = pygame.Surface(BOARD_SIZE)
     chat_surface = pygame.Surface(CHAT_SIZE)
     chat_window = ChatWindow(player, chat_surface)
-    threading.Thread(target=receive_messages, args=(player, chat_window)).start()
+    player.thread = threading.Thread(target=receive_messages, args=(player, chat_window))
+    player.thread.daemon = True
+    player.thread.start()
     selected_piece = None
+
+    turn = player.play_first
 
     while True:
 
         clock.tick(FPS)
 
+        my_turn = True if turn_order == turn else False
+
         events = pygame.event.get()
         for e in events:
             if e.type == pygame.QUIT:
-                exit()
-            
+                player.end_connection()
+                pygame.quit()
+                sys.exit()
             elif e.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                if(pos_on_board(pos)):
-                    row = (pos[1] - BOARD_DESLOCATION[1]) // game_logic.SQUARE_SIZE
-                    col = (pos[0] - BOARD_DESLOCATION[0]) // game_logic.SQUARE_SIZE
+                if my_turn:
+                    pos = pygame.mouse.get_pos()
+                    if(pos_on_board(pos)):
+                        row = (pos[1] - BOARD_DESLOCATION[1]) // game_logic.SQUARE_SIZE
+                        col = (pos[0] - BOARD_DESLOCATION[0]) // game_logic.SQUARE_SIZE
 
-                    if selected_piece is None:
-                        if board[row][col] == 1:
-                            selected_piece = (row, col)
-                    else:
-                        if game_logic.is_valid_move(board, selected_piece, (row, col)):
-                            board[selected_piece[0]][selected_piece[1]] = 0
-                            board[(selected_piece[0] + row) // 2][(selected_piece[1] + col) // 2] = 0
-                            board[row][col] = 1
+                        if selected_piece is None:
+                            if board[row][col] == 1:
+                                selected_piece = (row, col)
+                        else:
+                            if game_logic.is_valid_move(board, selected_piece, (row, col)):
+                                board[selected_piece[0]][selected_piece[1]] = 0
+                                board[(selected_piece[0] + row) // 2][(selected_piece[1] + col) // 2] = 0
+                                board[row][col] = 1
 
-                            send_board_state(player)
-                        selected_piece = None
+                                send_board_state(player)
+                                turn_order = not turn_order
+                            selected_piece = None
 
-            if game_logic.game_over(board):
-                print("Fim de Jogo")
-                
-                #return
+            if game_logic.game_over(board, my_turn) == 2:
+                end_game('Empate')
+            elif game_logic.game_over(board, my_turn) == 1:
+                end_game('Você venceu')
+            elif game_logic.game_over(board, my_turn) == 0:
+                end_game('Você perdeu')
+            
             chat_window.handle_event(e)
         
         # Continue playing
@@ -450,8 +487,8 @@ def draw_interface():
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
-                exit()
-
+                pygame.quit()
+                sys.exit()
         if main_menu.is_enabled():
             main_menu.mainloop(surface, draw_background, fps_limit=FPS)
 

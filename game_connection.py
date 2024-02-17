@@ -7,7 +7,8 @@ class Client:
         self.port = 0
         self.ip = socket.gethostbyname(socket.gethostname())
         self.client_connected = False
-        self.player_id = None
+        self.thread = None
+        self.play_first = None
 
     def create_room(self):
         self.client_socket.bind(('', 0))
@@ -35,3 +36,6 @@ class Client:
         self.client_socket.listen(1)
         self.connection, _ = self.client_socket.accept()
         self.client_connected = True
+
+    def end_connection(self):
+        self.client_socket.close()

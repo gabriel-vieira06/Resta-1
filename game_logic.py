@@ -43,7 +43,15 @@ def is_valid_move(board, start_pos, end_pos):
     return False
 
 # Função para verificar se o jogo acabou
-def game_over(board):
+def game_over(board, my_turn):
+
+    piece_count = sum(row.count(1) for row in board)
+
+    if piece_count == 1 and my_turn == True:
+        return 1    # Venceu
+    elif piece_count == 1 and my_turn == False:
+        return 0    # Perdeu
+
     for row in range(ROW_COUNT):
         for col in range(COL_COUNT):
             if board[row][col] == 1:
@@ -51,5 +59,6 @@ def game_over(board):
                    (row <= ROW_COUNT-3 and board[row+1][col] == 1 and board[row+2][col] == 0) or \
                    (col >= 2 and board[row][col-1] == 1 and board[row][col-2] == 0) or \
                    (col <= COL_COUNT-3 and board[row][col+1] == 1 and board[row][col+2] == 0):
-                    return False
-    return True
+                    return -1   # Continua
+
+    return 2    # Empate
