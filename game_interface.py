@@ -389,6 +389,10 @@ def play_function(player):
 
     turn = player.play_first
 
+    surrender_btn = pygame.Rect(380, 650, 100, 50)
+    surrender_txt = pygame.font.Font(None, 36).render("Desistir", True, BLACK)
+    surrender_txt_rect = surrender_txt.get_rect(center=surrender_btn.center)
+
     while True:
 
         clock.tick(FPS)
@@ -402,8 +406,10 @@ def play_function(player):
                 pygame.quit()
                 sys.exit()
             elif e.type == pygame.MOUSEBUTTONDOWN:
-                if my_turn:
-                    pos = pygame.mouse.get_pos()
+                pos = pygame.mouse.get_pos()
+                if surrender_btn.collidepoint(e.pos):
+                    end_game('Desistiu')
+                elif my_turn:
                     if(pos_on_board(pos)):
                         row = (pos[1] - BOARD_DESLOCATION[1]) // game_logic.SQUARE_SIZE
                         col = (pos[0] - BOARD_DESLOCATION[0]) // game_logic.SQUARE_SIZE
@@ -424,9 +430,9 @@ def play_function(player):
             if game_logic.game_over(board, my_turn) == 2:
                 end_game('Empate')
             elif game_logic.game_over(board, my_turn) == 1:
-                end_game('Você venceu')
+                end_game('Voce venceu')
             elif game_logic.game_over(board, my_turn) == 0:
-                end_game('Você perdeu')
+                end_game('Voce perdeu')
             
             chat_window.handle_event(e)
         
@@ -435,6 +441,8 @@ def play_function(player):
 
         surface.blit(chat_surface, (CHAT_DESLOCATION))
         surface.blit(board_surface, (BOARD_DESLOCATION))
+        pygame.draw.rect(surface, WHITE, surrender_btn)
+        surface.blit(surrender_txt, surrender_txt_rect)
 
         chat_window.draw()
         game_logic.draw_board(board_surface, board, selected_piece)
