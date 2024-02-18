@@ -105,21 +105,42 @@ def end_game(game_state):
 
     seconds = 10
 
+    # -------------------------------------------------------------------------
+    # Create menu: End Menu
+    # -------------------------------------------------------------------------
+
+    end_menu = pygame_menu.Menu (
+        height=WINDOW_SIZE[1] * 0.6,
+        theme=default_theme,
+        title='Fim do jogo',
+        width=WINDOW_SIZE[0] * 0.6
+    )
+
+    time_label = end_menu.add.label(
+        f"Encerrando em {seconds} segundos...",
+        font_size=FONT_SIZE
+    )
+    end_menu.add.vertical_margin(20)
+    end_menu.add.label(
+        f"Resultado da partida: {game_state}",
+        font_size=FONT_SIZE
+    )
+
     while seconds > 0:
-        for e in pygame.event.get():
+        events = pygame.event.get()
+        for e in events:
             if e.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-        surface.fill((255, 255, 255))
-        texto = font.render("Encerrando em {} segundos...".format(seconds), True, (0, 0, 0))
-        surface.blit(texto, (50, 100))
-        texto = font.render("Resultado da partida: {}".format(game_state), True, (0, 0, 0))
-        surface.blit(texto, (50, 200))
-
+        draw_background()
+        end_menu.update(events)
+        end_menu.draw(surface)
         pygame.display.flip()
+
         counter.tick(1)
         seconds -= 1
+        time_label.set_title(f"Encerrando em {seconds} segundos...")
     
     pygame.quit()
     sys.exit()
