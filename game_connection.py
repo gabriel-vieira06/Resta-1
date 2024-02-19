@@ -1,7 +1,7 @@
 import socket
 import threading
 
-class Client:
+class Player:
     def __init__(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.port = 0

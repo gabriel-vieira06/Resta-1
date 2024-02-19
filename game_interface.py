@@ -27,11 +27,12 @@ IP = None
 PORT = None
 
 turn_order = True
+surrender_flag = False
 
 clock: Optional['pygame.time.Clock'] = None
 
-client: Optional['game_connection.Client_2'] = None
-server: Optional['game_connection.Client_2'] = None
+client: Optional['game_connection.Player'] = None
+server: Optional['game_connection.Player'] = None
 
 main_menu: Optional['pygame_menu.Menu'] = None
 host_menu: Optional['pygame_menu.Menu'] = None
@@ -73,6 +74,7 @@ def receive_messages(client, chat_window):
     
     global board
     global turn_order
+    global surrender_flag
     
     while True:
         try:
@@ -81,6 +83,8 @@ def receive_messages(client, chat_window):
             if message.startswith(b'M:'):
                 message_without_prefix = message[2:].decode()
                 chat_window.add_message(f'Oponente: {message_without_prefix}')
+            elif message.startswith(b'S:'):
+                surrender_flag = True
             else:
                 board = pickle.loads(message)
                 time.sleep(1)
@@ -203,7 +207,7 @@ def challenger_screen_play():
     # Client Socket
     # -------------------------------------------------------------------------
 
-    client = game_connection.Client()
+    client = game_connection.Player()
     client.join_room(IP, int(PORT))
 
     search_menu.disable()
@@ -233,7 +237,7 @@ def host_match():
     # Server Socket
     # -------------------------------------------------------------------------
 
-    server = game_connection.Client()
+    server = game_connection.Player()
     server.create_room()
 
     # -------------------------------------------------------------------------
@@ -376,6 +380,7 @@ def play_function(player):
     global clock
     global board
     global turn_order
+    global surrender_flag
     global IP
     global PORT
 
@@ -408,6 +413,7 @@ def play_function(player):
             elif e.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 if surrender_btn.collidepoint(e.pos):
+                    player.send_message(b'S:')
                     end_game('Desistiu')
                 elif my_turn:
                     if(pos_on_board(pos)):
@@ -434,6 +440,9 @@ def play_function(player):
             elif game_logic.game_over(board, my_turn) == 0:
                 end_game('Voce perdeu')
             
+            if surrender_flag:
+                end_game('Seu oponente desistiu')
+
             chat_window.handle_event(e)
         
         # Continue playing
