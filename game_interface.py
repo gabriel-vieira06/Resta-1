@@ -407,6 +407,7 @@ def play_function(player):
         events = pygame.event.get()
         for e in events:
             if e.type == pygame.QUIT:
+                player.send_message(b'S:')
                 player.end_connection()
                 pygame.quit()
                 sys.exit()
@@ -414,6 +415,7 @@ def play_function(player):
                 pos = pygame.mouse.get_pos()
                 if surrender_btn.collidepoint(e.pos):
                     player.send_message(b'S:')
+                    player.end_connection()
                     end_game('Desistiu')
                 elif my_turn:
                     if(pos_on_board(pos)):
